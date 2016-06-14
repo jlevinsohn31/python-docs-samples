@@ -27,13 +27,17 @@ Prerequisites:
 """
 
 import argparse
-import uuid
 
 from gcloud import bigtable
 from gcloud.bigtable import happybase
 
 
 def main(project, cluster_id, zone, table_name):
+    # [START connecting_to_bigtable]
+    # project = "my-project-id"
+    # cluster_id = "my-cluster"
+    # zone = "your-zone-id"
+
     # The client must be created with admin=True because it will create a
     # table.
     client = bigtable.Client(project=project, admin=True)
@@ -42,7 +46,10 @@ def main(project, cluster_id, zone, table_name):
         cluster = client.cluster(zone, cluster_id)
         cluster.reload()
         connection = happybase.Connection(cluster=cluster)
+        # [END connecting_to_bigtable]
 
+        # [START creating_a_table]
+        # table_name = 'Hello-Bigtable'
         print('Creating the {} table.'.format(table_name))
         column_family_name = 'cf1'
         connection.create_table(
@@ -50,27 +57,49 @@ def main(project, cluster_id, zone, table_name):
             {
                 column_family_name: dict()  # Use default options.
             })
-        table = connection.table(table_name)
+        # [END creating_a_table]
 
+        # [START writing_rows]
         print('Writing some greetings to the table.')
+        table = connection.table(table_name)
         column_name = '{fam}:greeting'.format(fam=column_family_name)
         greetings = [
             'Hello World!',
             'Hello Cloud Bigtable!',
             'Hello HappyBase!',
         ]
-        for value in greetings:
-            # Use a random key to distribute writes more evenly across shards.
-            # See: https://cloud.google.com/bigtable/docs/schema-design
-            row_key = str(uuid.uuid4())
+        for i, value in enumerate(greetings):
+            # Note: This example uses sequential numeric IDs for simplicity,
+            # but this can result in poor performance in a production
+            # application.  Since rows are stored in sorted order by key,
+            # sequential keys can result in poor distribution of operations
+            # across nodes.
+            #
+            # For more information about how to design a Bigtable schema for
+            # the best performance, see the documentation:
+            #
+            #     https://cloud.google.com/bigtable/docs/schema-design
+            row_key = 'greeting{}'.format(i)
             table.put(row_key, {column_name: value})
+        # [END writing_rows]
 
+        # [START getting_a_row]
+        print('Getting a single greeting by row key.')
+        key = 'greeting0'
+        row = table.row(key)
+        print('\t{}: {}'.format(key, row[column_name]))
+        # [END getting_a_row]
+
+        # [START scanning_all_rows]
         print('Scanning for all greetings:')
         for key, row in table.scan():
             print('\t{}: {}'.format(key, row[column_name]))
+        # [END scanning_all_rows]
 
+        # [START deleting_a_table]
         print('Deleting the {} table.'.format(table_name))
         connection.delete_table(table_name)
+        # [END deleting_a_table]
 
 
 if __name__ == '__main__':
